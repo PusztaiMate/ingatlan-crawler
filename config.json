@@ -1,0 +1,11 @@
+{
+	"kerületek": [
+		"xi",
+		"xxii"
+	],
+	"min_ár": 60,
+	"max_ár": 90,
+	"min_méret": 85,
+	"max_méret": 140,
+	"lakás_vagy_ház": "haz"
+}
