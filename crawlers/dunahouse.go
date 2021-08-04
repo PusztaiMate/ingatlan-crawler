@@ -67,7 +67,6 @@ func (lc *DunaHouseLinkCollector) Predicate(n *html.Node) bool {
 }
 
 func (lc *DunaHouseLinkCollector) ProcessNode(n *html.Node) {
-	log.Printf("node is %#v\n", n)
 	link := findHrefAttribute(n)
 
 	if len(link) == 0 {
@@ -86,6 +85,7 @@ func (lc *DunaHouseLinkCollector) GetNextPageFormatString() string {
 }
 
 type DunaHouseGeneralInfoExtractor struct {
+	LotArea                                           int
 	Address, NumOfFloors, Heating, BuiltIn, Condition string
 }
 
@@ -94,31 +94,45 @@ func (e *DunaHouseGeneralInfoExtractor) Predicate(n *html.Node) bool {
 }
 
 func (e *DunaHouseGeneralInfoExtractor) ProcessNode(n *html.Node) {
+	var paramName, paramVal string
+
 	for c := n.FirstChild; c != nil; c = c.NextSibling {
 		if doesClassAttrContainsVal(c, "col-xs-6") {
+
 			cc := c.FirstChild
-			for cc != nil {
-				sib := cc.NextSibling
-				if sib == nil {
-					break
-				}
-
-				switch cc.Data {
-				case "Épület állapota belül:":
-					e.Condition = sib.Data
-				case "Belsö szintek száma:":
-					e.NumOfFloors = sib.Data
-				case "Fűtés":
-					e.Heating = sib.Data
-				case "Épült":
-					e.BuiltIn = sib.Data
-				case "Cím:":
-					e.Address = sib.Data
-				}
-
-				cc = sib
+			if cc == nil {
+				continue
 			}
 
+			if len(paramName) == 0 {
+				paramName = strings.TrimSpace(cc.Data)
+				continue
+			}
+
+			paramVal = strings.TrimSpace(cc.Data)
+
+			switch paramName {
+			case "Épület állapota belül:":
+				e.Condition = paramVal
+			case "Belsö szintek száma:":
+				e.NumOfFloors = paramVal
+			case "Fűtés:":
+				e.Heating = paramVal
+			case "Épült:":
+				e.BuiltIn = paramVal
+			case "Cím:":
+				e.Address = paramVal
+			case "Telek mérete:":
+				areaAsString := strings.TrimSpace(strings.Split(paramVal, "m")[0])
+				area, err := strconv.Atoi(areaAsString)
+				if err != nil {
+					log.Printf("could not convert %s to int", areaAsString)
+					e.LotArea = 0
+				}
+				e.LotArea = area
+			}
+
+			paramName, paramVal = "", ""
 		}
 	}
 }
@@ -129,6 +143,67 @@ func (e *DunaHouseGeneralInfoExtractor) AddInfoIntoProp(p *PropertyInfo) {
 	p.Heating = e.Heating
 	p.BuiltIn = e.BuiltIn
 	p.Condition = e.Condition
+	p.LotArea = e.LotArea
+}
+
+type DunaHouseMainInfoExtractor struct {
+	Price                 float64
+	HouseArea, NumOfRooms int
+}
+
+func (e *DunaHouseMainInfoExtractor) Predicate(n *html.Node) bool {
+	return n.Data == "li" && hasSpanChild(n) && hasDivChild(n)
+}
+
+func (e *DunaHouseMainInfoExtractor) ProcessNode(n *html.Node) {
+	var paramName, paramVal string
+
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		if c.Data == "span" {
+			paramName = strings.TrimSpace(c.FirstChild.Data)
+		} else if c.Data == "div" && doesClassAttrContainsVal(c, "value") {
+			v := strings.TrimSpace(c.FirstChild.Data)
+			if v == "b" && c.FirstChild.FirstChild != nil {
+				paramVal = strings.TrimSpace(c.FirstChild.FirstChild.Data)
+			} else {
+				paramVal = v
+			}
+		}
+	}
+
+	switch paramName {
+	case "Ár":
+		priceAsString := strings.Split(paramVal, " ")[0] // get rid of "<price> Ft"
+		price, err := strconv.ParseFloat(priceAsString, 2)
+		if err != nil {
+			log.Printf("could not parse value: %s\n", paramVal)
+			e.Price = -1.0
+		}
+		e.Price = price
+	case "Méret":
+		sizeAsString := strings.Split(paramVal, "m")[0] //140m2
+		area, err := strconv.Atoi(sizeAsString)
+		if err != nil {
+			log.Printf("could not parse value: %s\n", paramVal)
+			e.HouseArea = -1
+		}
+		e.HouseArea = area
+	case "Szoba":
+		numOfRoomsAsString := strings.Split(paramVal, " ")[0]
+		numOfRooms, err := strconv.Atoi(numOfRoomsAsString)
+		if err != nil {
+			log.Printf("could not parse value: %s\n", paramVal)
+			e.NumOfRooms = -1
+		}
+		e.NumOfRooms = numOfRooms
+	}
+}
+
+func (e *DunaHouseMainInfoExtractor) AddInfoIntoProp(prop *PropertyInfo) {
+	prop.PricePerSqrMeter = (e.Price / float64(e.HouseArea)) * 1000000.0
+	prop.HouseArea = e.HouseArea
+	prop.NumOfRooms = e.NumOfRooms
+	prop.Price = e.Price
 }
 
 func getNumberForRomanNumeric(roman string) (int, error) {

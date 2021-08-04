@@ -284,14 +284,6 @@ func extractPriceFromString(s string) (float64, error) {
 	return price, nil
 }
 
-func copyInfoFromMainExtractorToProp(m *IngatlanComMainInfoExtractor, p *PropertyInfo) {
-	p.Price = m.Price
-	p.LotArea = m.LotArea
-	p.HouseArea = m.HouseArea
-	p.NumOfRooms = m.NumOfRooms
-	p.PricePerSqrMeter = m.PricePerSqrMeter
-}
-
 func isNodeListingLink(n *html.Node) bool {
 	return doesClassAttrContainsVal(n, "listing__link")
 }

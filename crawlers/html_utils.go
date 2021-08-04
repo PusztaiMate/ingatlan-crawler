@@ -49,6 +49,7 @@ func CollectInfoFromPropertyPage(url string, propChan chan<- PropertyInfo, extra
 	traverseHtmlTreeAndExecuteExtractors(doc, nodeProcessors...)
 
 	propInfo := PropertyInfo{}
+	propInfo.Link = url
 	for _, extractor := range extractors {
 		extractor.AddInfoIntoProp(&propInfo)
 	}
@@ -216,4 +217,21 @@ func extractListingPagesInfo(lpe ListingPagesExtractor, url string) error {
 	log.Printf("found %d page(s) of data, starting parsing", lpe.MaxPageNumber())
 
 	return nil
+}
+
+func hasDivChild(n *html.Node) bool {
+	return hasChildWithTag(n, "div")
+}
+
+func hasSpanChild(n *html.Node) bool {
+	return hasChildWithTag(n, "span")
+}
+
+func hasChildWithTag(n *html.Node, tag string) bool {
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		if c.Data == tag {
+			return true
+		}
+	}
+	return false
 }

@@ -29,19 +29,19 @@ func main() {
 	ingatlanLinks := ile.GetLinks()
 	log.Printf("Collected (%d) links from ingatlan.com", len(ingatlanLinks))
 
-	propInfos := make(chan crawlers.PropertyInfo)
+	propInfos := make(chan crawlers.PropertyInfo, len(dunaHouseLinks)+len(ingatlanLinks))
 	var wg sync.WaitGroup
 
 	dhge := crawlers.DunaHouseGeneralInfoExtractor{}
+	dhme := crawlers.DunaHouseMainInfoExtractor{}
 	for _, l := range dunaHouseLinks {
 		linkToProp := crawlers.JoinUri(crawlers.DunaHouseBaseUrl, l)
 		wg.Add(1)
 		go func() {
-			crawlers.CollectInfoFromPropertyPage(linkToProp, propInfos, &dhge)
+			crawlers.CollectInfoFromPropertyPage(linkToProp, propInfos, &dhge, &dhme)
 			defer wg.Done()
 		}()
 	}
-
 	imie := crawlers.IngatlanComMainInfoExtractor{}
 	ipie := crawlers.IngatlanComPropertyInfoExtractor{}
 	iae := crawlers.IngatlanComAddressExtractor{}
@@ -55,16 +55,15 @@ func main() {
 	}
 
 	log.Println("Waiting for crawlers to finish collecting info from individual pages.")
-	var props []crawlers.PropertyInfo
-	go func() {
-		for pi := range propInfos {
-			log.Printf("Property info is %#v", pi)
-			if !crawlers.IsPropPresentInList(props, pi) {
-				props = append(props, pi)
-			}
-		}
-	}()
 	wg.Wait()
+	close(propInfos)
+
+	var props []crawlers.PropertyInfo
+	for pi := range propInfos {
+		if !crawlers.IsPropPresentInList(props, pi) {
+			props = append(props, pi)
+		}
+	}
 	log.Println("Finished waiting, starting processing data")
 
 	filename := crawlers.CreateFileNameFromConfig(config, "")

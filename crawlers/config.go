@@ -33,7 +33,7 @@ func ReadJsonConfig(configfile string) (Config, error) {
 }
 
 func CreateFileNameFromConfig(c Config, prefix string) string {
-	if !strings.HasSuffix(prefix, "_") {
+	if !strings.HasSuffix(prefix, "_") && len(prefix) != 0 {
 		prefix += "_"
 	}
 	districts := strings.Join(c.Districts, "_")
